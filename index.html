@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Petualangan Mobil Mandarin</title>
+    <style>
+        :root {
+            --sky: #87CEEB;
+            --road: #555;
+            --grass: #7cfc00;
+            --yellow: #FFD700;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--sky);
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        /* --- Header UI --- */
+        #ui-top {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.8);
+            font-weight: bold;
+            font-size: 1.2rem;
+            border-bottom: 3px solid #ddd;
+        }
+
+        /* --- World Animation --- */
+        #game-world {
+            position: relative;
+            height: 250px;
+            background: linear-gradient(to bottom, var(--sky) 70%, var(--grass) 70%);
+            overflow: hidden;
+        }
+
+        .city-bg {
+            position: absolute;
+            bottom: 30%;
+            font-size: 80px;
+            white-space: nowrap;
+            animation: cityMove 20s linear infinite;
+            opacity: 0.6;
+        }
+
+        @keyframes cityMove {
+            from { transform: translateX(100%); }
+            to { transform: translateX(-100%); }
+        }
+
+        #road {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 60px;
+            background-color: var(--road);
+            border-top: 4px solid #fff;
+            border-bottom: 4px solid #fff;
+        }
+
+        #car {
+            position: absolute;
+            bottom: 10px;
+            left: 20px;
+            font-size: 50px;
+            z-index: 10;
+            transition: left 1s ease-in-out, transform 0.5s;
+        }
+
+        #obstacle {
+            position: absolute;
+            bottom: 10px;
+            right: 50px;
+            font-size: 50px;
+            z-index: 5;
+        }
+
+        /* --- Interaction Area --- */
+        #interaction-panel {
+            padding: 20px;
+            text-align: center;
+            background: white;
+            min-height: calc(100vh - 310px);
+            border-radius: 30px 30px 0 0;
+            box-shadow: 0 -10px 20px rgba(0,0,0,0.1);
+        }
+
+        .sentence-box {
+            font-size: 1.5rem;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            min-height: 60px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 15px;
+            border: 2px dashed #ccc;
+        }
+
+        .pinyin {
+            color: #e67e22;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+
+        #mic-btn {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: none;
+            background: #ff4757;
+            color: white;
+            font-size: 40px;
+            box-shadow: 0 6px #c0392b;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        #mic-btn:active {
+            background: #ff6b81;
+            transform: translateY(4px);
+            box-shadow: 0 2px #c0392b;
+        }
+
+        #status-msg {
+            height: 30px;
+            margin: 10px;
+            font-weight: bold;
+        }
+
+        .btn-next {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: #2ed573;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            display: none;
+            cursor: pointer;
+            box-shadow: 0 4px #26af61;
+        }
+
+        /* --- Effects --- */
+        .crash { animation: shake 0.5s; }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            20% { transform: translate(-3px, 0px) rotate(-1deg); }
+            40% { transform: translate(3px, 2px) rotate(1deg); }
+            100% { transform: translate(1px, -1px) rotate(0deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui-top">
+    <span id="level-display">Level: 1 / 10</span>
+    <span id="score-display">Skor: 0</span>
+</div>
+
+<div id="game-world">
+    <div class="city-bg">🏙️ 🏨 🏠🏫 🌳🏪 🏢 🏡🏬 🌳🏛️</div>
+    <div id="road"></div>
+    <div id="car">🚗</div>
+    <div id="obstacle">🚧</div>
+</div>
+
+<div id="interaction-panel">
+    <div id="sentence-container">
+        <div id="place-icon">🍲</div>
+        <div class="sentence-box" id="target-sentence">Memuat...</div>
+        <div class="pinyin" id="pinyin-display"></div>
+    </div>
+
+    <div id="status-msg">Tekan mikrofon & bicara!</div>
+
+    <button id="mic-btn" title="Tekan untuk bicara">🎤</button>
+    <br>
+    <button id="next-btn" class="btn-next">Level Berikutnya ➔</button>
+</div>
+
+<script>
+    const sentences = [
+        { zh: "大卫觉得这儿的菜很好吃。", py: "Dàwèi juéde zhèr de cài hěn hǎochī.", icon: "😋" },
+        { zh: "这儿的环境很好。", py: "Zhèr de huánjìng hěn hǎo.", icon: "🌳" },
+        { zh: "服务员非常热情。", py: "Fúwùyuán fēicháng rèqíng.", icon: "👨‍🍳" },
+        { zh: "玛丽点了麻婆豆腐。", py: "Mǎlì diǎnle mápó dòufu.", icon: "🥘" },
+        { zh: "玛丽让服务员给他们一份菜单。", py: "Mǎlì ràng fúwùyuán gěi tāmen yī fèn càidān.", icon: "📋" },
+        { zh: "玛丽叫服务员。", py: "Mǎlì jiào fúwùyuán.", icon: "🔔" },
+        { zh: "请给我们菜单。", py: "Qǐng gěi wǒmen càidān.", icon: "📖" },
+        { zh: "我要一碗米饭。", py: "Wǒ yào yī wǎn mǐfàn.", icon: "🍚" },
+        { zh: "这家饭馆的菜又便宜又好吃。", py: "Zhè jiā fànguǎn de cài yòu piányi yòu hǎochī.", icon: "💰" },
+        { zh: "我们想点两个菜和一瓶饮料。", py: "Wǒmen xiǎng diǎn liǎng gè cài hé yī píng yǐnliào.", icon: "🥤" }
+    ];
+
+    let currentLevel = 0;
+    let score = 0;
+
+    // Speech Recognition Setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Pelayar ini tidak menyokong pengecaman suara. Sila gunakan Google Chrome.");
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "zh-CN"; // Diubah ke Mandarin karena kalimatnya Mandarin
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    const micBtn = document.getElementById('mic-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const statusMsg = document.getElementById('status-msg');
+    const car = document.getElementById('car');
+    const obstacle = document.getElementById('obstacle');
+
+    // Minta Akses Mikrofon di Awal
+    navigator.mediaDevices.getUserMedia({ audio: true })
+    .catch(() => {
+        statusMsg.innerText = "Sila benarkan akses mikrofon untuk bermain!";
+        statusMsg.style.color = "red";
+    });
+
+    function initLevel() {
+        if (currentLevel >= sentences.length) {
+            finishGame();
+            return;
+        }
+        
+        const data = sentences[currentLevel];
+        document.getElementById('target-sentence').innerText = data.zh;
+        document.getElementById('pinyin-display').innerText = data.py;
+        document.getElementById('place-icon').innerText = data.icon;
+        document.getElementById('level-display').innerText = `Level: ${currentLevel + 1} / ${sentences.length}`;
+        
+        statusMsg.innerText = "Tekan mikrofon & bicara!";
+        statusMsg.style.color = "black";
+        nextBtn.style.display = "none";
+        micBtn.style.display = "inline-block";
+        
+        // Reset posisi mobil
+        car.style.left = "20px";
+        car.style.transform = "rotate(0deg)";
+        obstacle.innerText = "🚧";
+    }
+
+    micBtn.addEventListener("click", () => {
+        try {
+            recognition.start();
+            statusMsg.innerText = "Mendengar...";
+            micBtn.style.background = "#2ed573";
+        } catch (e) {
+            console.log("Recognition already started");
+        }
+    });
+
+    recognition.onresult = (event) => {
+        const result = event.results[0][0].transcript;
+        const target = sentences[currentLevel].zh;
+        
+        // Cek akurasi sederhana
+        const similarity = compareStrings(result, target);
+        
+        if (similarity >= 0.75) {
+            handleSuccess();
+        } else {
+            handleFailure(result);
+        }
+    };
+
+    recognition.onerror = (event) => {
+        statusMsg.innerText = "Tiada suara diterima. Silahkan coba lagi.";
+        micBtn.style.background = "#ff4757";
+    };
+
+    recognition.onend = () => {
+        micBtn.style.background = "#ff4757";
+    };
+
+    function handleSuccess() {
+        score += 10;
+        document.getElementById('score-display').innerText = `Skor: ${score}`;
+        statusMsg.innerText = "Hebat! Pelafalan Benar! 🎉";
+        statusMsg.style.color = "#2ed573";
+        
+        // Animasi mobil lewat
+        car.style.left = "calc(100% - 100px)";
+        obstacle.innerText = "🚩";
+        
+        micBtn.style.display = "none";
+        nextBtn.style.display = "inline-block";
+        
+        // Play success sound (opsional via audio synth)
+        speakResult("🎉");
+    }
+
+    function handleFailure(heard) {
+        statusMsg.innerText = `Kurang tepat. Kamu bilang: ${heard}`;
+        statusMsg.style.color = "#ff4757";
+        
+        // Animasi tabrakan
+        car.classList.add('crash');
+        setTimeout(() => car.classList.remove('crash'), 500);
+        car.style.transform = "rotate(-10deg)";
+    }
+
+    nextBtn.addEventListener("click", () => {
+        currentLevel++;
+        initLevel();
+    });
+
+    function compareStrings(s1, s2) {
+        // Logika sederhana membandingkan karakter Mandarin
+        let matches = 0;
+        const cleanS1 = s1.replace(/[^\u4e00-\u9fa5]/g, "");
+        const cleanS2 = s2.replace(/[^\u4e00-\u9fa5]/g, "");
+        
+        for (let char of cleanS1) {
+            if (cleanS2.includes(char)) matches++;
+        }
+        return matches / Math.max(cleanS1.length, cleanS2.length);
+    }
+
+    function speakResult(emoji) {
+        // Menggunakan built-in TTS untuk feedback suara sederhana
+        const synth = window.speechSynthesis;
+        const utter = new SpeechSynthesisUtterance(emoji === "🎉" ? "Good Job" : "Try again");
+        synth.speak(utter);
+    }
+
+    function finishGame() {
+        document.getElementById('interaction-panel').innerHTML = `
+            <h2>Permainan Selesai!</h2>
+            <p style="font-size: 2rem">Skor Akhir: ${score}</p>
+            <button onclick="location.reload()" class="btn-next" style="display:inline-block">Main Lagi</button>
+        `;
+    }
+
+    // Jalankan level pertama
+    initLevel();
+
+</script>
+</body>
+</html>
